@@ -84,7 +84,6 @@ class PyNoteApp(tk.Tk):
                 self.title(f"{APP_TITLE} - {path}")
                 self._update_status()
             except Exception as e:
-                # try fallback to utf-8 before giving up
                 old_enc = self._encoding
                 try:
                     self._encoding = 'utf-8'

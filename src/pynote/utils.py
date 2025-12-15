@@ -130,7 +130,7 @@ def detect_encoding(filepath):
         except Exception:
             return 'utf-8'
         
-def detect_file_encoding(file_path): #having both idk why
+def detect_file_encoding(file_path): #having both just in case
     with open(file_path, 'rb') as file:
         raw_data = file.read(10000)
         result = chardet.detect(raw_data)
