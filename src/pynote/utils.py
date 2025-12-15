@@ -137,4 +137,4 @@ def detect_file_encoding(file_path): #having both just in case
         encoding = result['encoding']
         confidence = result['confidence']
         return encoding, confidence
-
+#
