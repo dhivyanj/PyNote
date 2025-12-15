@@ -99,20 +99,30 @@ def count_chars(text):
 def detect_encoding(filepath):
     """
     Detect file encoding (basic implementation).
-    
+
+    This function checks for a UTF-8 BOM first and returns 'utf-8-sig' if present
+    so the BOM will be stripped automatically when reading. Otherwise it tries
+    to read the file as UTF-8 and falls back to latin-1.
+
     Args:
         filepath: Path to file
-    
+
     Returns:
         str: Encoding name (defaults to 'utf-8')
     """
     try:
-        # Try UTF-8 first
+        with open(filepath, 'rb') as f:
+            head = f.read(3)
+            if head.startswith(b"\xef\xbb\xbf"):
+                return 'utf-8-sig'
+    except Exception:
+        pass
+
+    try:
         with open(filepath, 'r', encoding='utf-8') as f:
             f.read()
         return 'utf-8'
     except UnicodeDecodeError:
-        # Fallback to latin-1
         try:
             with open(filepath, 'r', encoding='latin-1') as f:
                 f.read()
@@ -120,7 +130,7 @@ def detect_encoding(filepath):
         except Exception:
             return 'utf-8'
         
-def detect_file_encoding(file_path):
+def detect_file_encoding(file_path): #having both idk why
     with open(file_path, 'rb') as file:
         raw_data = file.read(10000)
         result = chardet.detect(raw_data)

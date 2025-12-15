@@ -11,7 +11,7 @@ class PyNoteApp(tk.Tk):
         self.title(APP_TITLE)
         self.geometry('800x600')
         self._filepath = None
-        self._encoding = None
+        self._encoding = 'utf-8'
         self._create_widgets()
         self._create_menu()
         self._bind_shortcuts()
@@ -26,7 +26,7 @@ class PyNoteApp(tk.Tk):
 
         # status bar
         self.status = tk.StringVar()
-        self.status.set(f'Ln 1, Col 0\nEncoding: -')
+        self.status.set(f'Ln 1, Col 0\nEncoding: {self._encoding}')
         status_bar = ttk.Label(self, textvariable=self.status, anchor='w')
         status_bar.pack(side='bottom', fill='x')
 
@@ -42,6 +42,8 @@ class PyNoteApp(tk.Tk):
         filemenu.add_command(label='Save', command=self.save_file)
         filemenu.add_command(label='Save As', command=self.save_as)
         filemenu.add_separator()
+        filemenu.add_command(label='Set Encoding', command=self.set_encoding)
+        filemenu.add_separator()
         filemenu.add_command(label='Exit', command=self.quit)
         menu.add_cascade(label='File', menu=filemenu)
         self.config(menu=menu)
@@ -50,6 +52,7 @@ class PyNoteApp(tk.Tk):
         self.bind('<Control-s>', lambda e: self.save_file())
         self.bind('<Control-o>', lambda e: self.open_file())
         self.bind('<Control-n>', lambda e: self.new_file())
+        self.bind('<Control-e>', lambda e: self.set_encoding())
         self.bind('<Control-z>', lambda e: self.text.event_generate('<<Undo>>'))
         self.bind('<Control-y>', lambda e: self.text.event_generate('<<Redo>>'))
 
@@ -57,7 +60,7 @@ class PyNoteApp(tk.Tk):
         if self._confirm_discard():
             self.text.delete('1.0', tk.END)
             self._filepath = None
-            self._encoding = None
+            self._encoding = 'utf-8'
             self.title(APP_TITLE)
             self._update_status()
 
@@ -71,9 +74,9 @@ class PyNoteApp(tk.Tk):
             try:
                 self._encoding = utils.detect_encoding(path)
             except Exception:
-                self._encoding = None
+                self._encoding = 'utf-8'
             try:
-                with open(path, 'r', encoding='utf-8') as f:
+                with open(path, 'r', encoding=self._encoding) as f:
                     data = f.read()
                 self.text.delete('1.0', tk.END)
                 self.text.insert('1.0', data)
@@ -81,16 +84,28 @@ class PyNoteApp(tk.Tk):
                 self.title(f"{APP_TITLE} - {path}")
                 self._update_status()
             except Exception as e:
-                # reset encoding if file couldn't be opened
-                self._encoding = None
-                messagebox.showerror('Error', f'Failed to open file: {str(e)}')
+                # try fallback to utf-8 before giving up
+                old_enc = self._encoding
+                try:
+                    self._encoding = 'utf-8'
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = f.read()
+                    self.text.delete('1.0', tk.END)
+                    self.text.insert('1.0', data)
+                    self._filepath = path
+                    self.title(f"{APP_TITLE} - {path}")
+                    self._update_status()
+                except Exception:
+                    self._encoding = old_enc or 'utf-8'
+                    messagebox.showerror('Error', f'Failed to open file: {str(e)}')
 
     def save_file(self):
         if self._filepath:
             try:
-                with open(self._filepath, 'w', encoding='utf-8') as f:
+                enc = self._encoding or 'utf-8'
+                with open(self._filepath, 'w', encoding=enc) as f:
                     f.write(self.text.get('1.0', tk.END))
-                self._encoding = 'utf-8'
+                self._encoding = enc
                 self.text.edit_modified(False)
                 self._update_status()
                 messagebox.showinfo('Saved', 'File saved successfully')
@@ -106,10 +121,11 @@ class PyNoteApp(tk.Tk):
         )
         if path:
             try:
-                with open(path, 'w', encoding='utf-8') as f:
+                enc = self._encoding or 'utf-8'
+                with open(path, 'w', encoding=enc) as f:
                     f.write(self.text.get('1.0', tk.END))
                 self._filepath = path
-                self._encoding = 'utf-8'
+                self._encoding = enc
                 self.title(f"{APP_TITLE} - {path}")
                 self.text.edit_modified(False)
                 self._update_status()
@@ -125,6 +141,44 @@ class PyNoteApp(tk.Tk):
             self.status.set(f'Ln {line}, Col {col}\nEncoding: {self._encoding}')
         else:
             self.status.set(f'Ln {line}, Col {col}\nEncoding: -')
+
+    def set_encoding(self):
+        dialog = tk.Toplevel(self)
+        dialog.title('Set Encoding')
+        dialog.transient(self)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text='Select file encoding:').pack(padx=10, pady=(10, 0))
+        enc_var = tk.StringVar(value=self._encoding or 'utf-8')
+        cb = ttk.Combobox(dialog, textvariable=enc_var, values=['utf-8', 'latin-1'], state='readonly')
+        cb.pack(padx=10, pady=10)
+        cb.focus_set()
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(padx=10, pady=(0, 10))
+
+        def on_ok():
+            self._encoding = enc_var.get()
+            if self._filepath:
+                try:
+                    with open(self._filepath, 'r', encoding=self._encoding) as f:
+                        data = f.read()
+                    self.text.delete('1.0', tk.END)
+                    self.text.insert('1.0', data)
+                except Exception as e:
+                    messagebox.showerror('Error', f'Failed to reload file with encoding {self._encoding}: {e}')
+                else:
+                    self._encoding = enc_var.get()
+            self._update_status()
+            dialog.destroy()            
+
+        def on_cancel():
+            dialog.destroy()
+
+        ttk.Button(btn_frame, text='OK', command=on_ok).pack(side='left', padx=5)
+        ttk.Button(btn_frame, text='Cancel', command=on_cancel).pack(side='left', padx=5)
+
+        self.wait_window(dialog)
 
     def _confirm_discard(self):
         if self.text.edit_modified():
