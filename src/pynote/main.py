@@ -1,9 +1,9 @@
 # src/pynote/main.py
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+import utils
 
 APP_TITLE = "PyNote"
-
 
 class PyNoteApp(tk.Tk):
     def __init__(self):
@@ -11,6 +11,7 @@ class PyNoteApp(tk.Tk):
         self.title(APP_TITLE)
         self.geometry('800x600')
         self._filepath = None
+        self._encoding = None
         self._create_widgets()
         self._create_menu()
         self._bind_shortcuts()
@@ -25,7 +26,7 @@ class PyNoteApp(tk.Tk):
 
         # status bar
         self.status = tk.StringVar()
-        self.status.set('Ln 1, Col 0')
+        self.status.set(f'Ln 1, Col 0\nEncoding: -')
         status_bar = ttk.Label(self, textvariable=self.status, anchor='w')
         status_bar.pack(side='bottom', fill='x')
 
@@ -56,7 +57,9 @@ class PyNoteApp(tk.Tk):
         if self._confirm_discard():
             self.text.delete('1.0', tk.END)
             self._filepath = None
+            self._encoding = None
             self.title(APP_TITLE)
+            self._update_status()
 
     def open_file(self):
         if not self._confirm_discard():
@@ -66,13 +69,20 @@ class PyNoteApp(tk.Tk):
         )
         if path:
             try:
+                self._encoding = utils.detect_encoding(path)
+            except Exception:
+                self._encoding = None
+            try:
                 with open(path, 'r', encoding='utf-8') as f:
                     data = f.read()
                 self.text.delete('1.0', tk.END)
                 self.text.insert('1.0', data)
                 self._filepath = path
                 self.title(f"{APP_TITLE} - {path}")
+                self._update_status()
             except Exception as e:
+                # reset encoding if file couldn't be opened
+                self._encoding = None
                 messagebox.showerror('Error', f'Failed to open file: {str(e)}')
 
     def save_file(self):
@@ -80,7 +90,9 @@ class PyNoteApp(tk.Tk):
             try:
                 with open(self._filepath, 'w', encoding='utf-8') as f:
                     f.write(self.text.get('1.0', tk.END))
+                self._encoding = 'utf-8'
                 self.text.edit_modified(False)
+                self._update_status()
                 messagebox.showinfo('Saved', 'File saved successfully')
             except Exception as e:
                 messagebox.showerror('Error', f'Failed to save file: {str(e)}')
@@ -97,8 +109,10 @@ class PyNoteApp(tk.Tk):
                 with open(path, 'w', encoding='utf-8') as f:
                     f.write(self.text.get('1.0', tk.END))
                 self._filepath = path
+                self._encoding = 'utf-8'
                 self.title(f"{APP_TITLE} - {path}")
                 self.text.edit_modified(False)
+                self._update_status()
                 messagebox.showinfo('Saved', 'File saved successfully')
             except Exception as e:
                 messagebox.showerror('Error', f'Failed to save file: {str(e)}')
@@ -107,7 +121,10 @@ class PyNoteApp(tk.Tk):
         idx = self.text.index(tk.INSERT).split('.')
         line = idx[0]
         col = idx[1]
-        self.status.set(f'Ln {line}, Col {col}')
+        if self._encoding:
+            self.status.set(f'Ln {line}, Col {col}\nEncoding: {self._encoding}')
+        else:
+            self.status.set(f'Ln {line}, Col {col}\nEncoding: -')
 
     def _confirm_discard(self):
         if self.text.edit_modified():

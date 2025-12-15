@@ -6,7 +6,7 @@ Utility functions for PyNote editor.
 import os
 import json
 from pathlib import Path
-
+import chardet
 
 def get_config_dir():
     """
@@ -119,4 +119,12 @@ def detect_encoding(filepath):
             return 'latin-1'
         except Exception:
             return 'utf-8'
+        
+def detect_file_encoding(file_path):
+    with open(file_path, 'rb') as file:
+        raw_data = file.read(10000)
+        result = chardet.detect(raw_data)
+        encoding = result['encoding']
+        confidence = result['confidence']
+        return encoding, confidence
 
